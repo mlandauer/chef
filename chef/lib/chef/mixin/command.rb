@@ -117,29 +117,20 @@ class Chef
           stdout.sync = true
           stderr.sync = true
           
-          if stdout.ready?
-            stdout_string = stdout.gets(nil)
-            if stdout_string
-              command_stdout = stdout_string
-              Chef::Log.debug("---- Begin #{args[:command]} STDOUT ----")
-              Chef::Log.debug(stdout_string.strip)
-              Chef::Log.debug("---- End #{args[:command]} STDOUT ----")
-            end
-          else
-            Chef::Log.debug("Nothing to read on '#{args[:command]}' STDOUT.")
+          command_stdout = ""
+          command_stderr = ""
+          Chef::Log.debug("---- Begin #{args[:command]} ----")
+          while !stdout.eof?
+            stdout_string = stdout.gets
+            command_stdout << stdout_string
+            Chef::Log.debug("STDOUT: #{stdout_string.strip}")
           end
-          
-          if stderr.ready?
-            stderr_string = stderr.gets(nil)
-            if stderr_string
-              command_stderr = stderr_string
-              Chef::Log.debug("---- Begin #{args[:command]} STDERR ----")
-              Chef::Log.debug(stderr_string.strip)
-              Chef::Log.debug("---- End #{args[:command]} STDERR ----")
-            end
-          else
-            Chef::Log.debug("Nothing to read on '#{args[:command]}' STDERR.")            
+          while !stderr.eof?
+            stderr_string = stderr.gets
+            command_stderr << stderr_string
+            Chef::Log.debug("STDERR: #{stderr_string.strip}")
           end
+          Chef::Log.debug("---- End #{args[:command]} ----")
         end
         
         args[:cwd] ||= Dir.tmpdir        
@@ -149,6 +140,7 @@ class Chef
         
         Chef::Log.debug("Executing #{args[:command]}")
         
+        args[:waitlast] = true
         status = nil
         Dir.chdir(args[:cwd]) do
           if args[:timeout]
