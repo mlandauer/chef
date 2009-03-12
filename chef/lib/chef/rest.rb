@@ -1,5 +1,6 @@
 #
 # Author:: Adam Jacob (<adam@opscode.com>)
+# Author:: Thom May (<thom@clearairturbulence.org>)
 # Copyright:: Copyright (c) 2008 Opscode, Inc.
 # License:: Apache License, Version 2.0
 #
@@ -123,6 +124,10 @@ class Chef
         if Chef::Config[:ssl_verify_mode] == :verify_none
           http.verify_mode = OpenSSL::SSL::VERIFY_NONE
         end
+        if File.exists?(Chef::Config[:ssl_client_cert])
+          http.cert = OpenSSL::X509::Certificate.new(File.read(Chef::Config[:ssl_client_cert]))
+          http.key = OpenSSL::PKey::RSA.new(File.read(Chef::Config[:ssl_client_key]))
+        end
       end
       http.read_timeout = Chef::Config[:rest_timeout]
       headers = Hash.new
@@ -162,7 +167,7 @@ class Chef
       http_retries = 1
 
       # TODO - Figure out how to test this block - I really have no idea how 
-      # to do it wouthout actually calling http.request... 
+      # to do it without actually calling http.request... 
       begin
         res = http.request(req) do |response|
           if raw
@@ -213,7 +218,7 @@ class Chef
             res.body
           end
         end
-      elsif res.kind_of?(Net::HTTPFound)
+      elsif res.kind_of?(Net::HTTPFound) or res.kind_of?(Net::HTTPMovedPermanently)
         if res['set-cookie']
           @cookies["#{url.host}:#{url.port}"] = res['set-cookie']
         end

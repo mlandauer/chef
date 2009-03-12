@@ -8,6 +8,11 @@ examples/openid-cstore
 examples/openid-db
 chef/pkg
 chef-server/pkg
+chef-server-slice/pkg
 chef/log
 chef-server/log
+log
+couchdb.stderr
+couchdb.stdout
+features/data/tmp/**
 *.swp

@@ -88,19 +88,23 @@ class Chef
       end
 
       def get_from_uri(source)
-        uri = URI.parse(source)
-        if uri.absolute
-          r = Chef::REST.new(source)
-          r.get_rest(source, true).open
+        begin
+          uri = URI.parse(source)
+          if uri.absolute
+            r = Chef::REST.new(source)
+            Chef::Log.debug("Downloading from absolute URI: #{source}")
+            r.get_rest(source, true).open
+          end
+        rescue URI::InvalidURIError
+          nil
         end
-      rescue URI::InvalidURIError
-        nil
       end
 
       def get_from_server(source, current_checksum)
         unless Chef::Config[:solo]
           r = Chef::REST.new(Chef::Config[:remotefile_url])
           url = generate_url(source, "files", :checksum => current_checksum)
+          Chef::Log.debug("Downloading from server: #{url}")
           r.get_rest(url, true).open
         end
       end

@@ -101,8 +101,7 @@ class Chef
       # === Returns
       # Returns the exit status of args[:command]
       def run_command(args={})         
-        command_stdout = nil
-        command_stderr = nil
+        command_output = ""
         
         args[:ignore_failure] ||= false
 
@@ -117,20 +116,33 @@ class Chef
           stdout.sync = true
           stderr.sync = true
           
-          command_stdout = ""
-          command_stderr = ""
-          Chef::Log.debug("---- Begin #{args[:command]} ----")
-          while !stdout.eof?
-            stdout_string = stdout.gets
-            command_stdout << stdout_string
-            Chef::Log.debug("STDOUT: #{stdout_string.strip}")
+          Chef::Log.debug("---- Begin output of #{args[:command]} ----")
+          
+          stdout_finished = false
+          stderr_finished = false
+          
+          while !stdout_finished || !stderr_finished
+            ready = IO.select([stdout, stderr], nil, nil, 1.0)
+            if ready.first.include?(stdout)
+              line = stdout.gets
+              if line
+                command_output << "STDOUT: #{line.strip}\n"
+                Chef::Log.debug("STDOUT: #{line.strip}")
+              else
+                stdout_finished = true
+              end
+            end
+            if ready.first.include?(stderr)
+              line = stderr.gets
+              if line
+                command_output << "STDERR: #{line.strip}\n"
+                Chef::Log.debug("STDERR: #{line.strip}")
+              else
+                stderr_finished = true
+              end
+            end
           end
-          while !stderr.eof?
-            stderr_string = stderr.gets
-            command_stderr << stderr_string
-            Chef::Log.debug("STDERR: #{stderr_string.strip}")
-          end
-          Chef::Log.debug("---- End #{args[:command]} ----")
+          Chef::Log.debug("---- End output of #{args[:command]} ----")
         end
         
         args[:cwd] ||= Dir.tmpdir        
@@ -142,6 +154,11 @@ class Chef
         
         args[:waitlast] = true
         status = nil
+        
+        # I don't understand what this :waitlast argument is doing, but setting it to true is causing the block in popen4
+        # not to wait until the command is finished to execute, kind of the opposite of what I would guess from the name
+        args[:waitlast] ||= true
+        
         Dir.chdir(args[:cwd]) do
           if args[:timeout]
             begin
@@ -149,7 +166,7 @@ class Chef
                 status = popen4(args[:command], args, &exec_processing_block)
               end
             rescue Timeout::Error => e
-              Chef::Log.error("#{args[:command_string]} exceeded timeout #{args[:timeout]}")
+              Chef::Log.error("#{args[:command]} exceeded timeout #{args[:timeout]}")
               raise(e)
             end
           else
@@ -162,17 +179,14 @@ class Chef
               # if the log level is not debug, through output of command when we fail
               output = ""
               if Chef::Log.logger.level > 0
-                output << "\n---- Begin #{args[:command]} STDOUT ----\n"
-                output << "#{command_stdout}\n"
-                output << "---- End #{args[:command]} STDOUT ----\n"
-                output << "---- Begin #{args[:command]} STDERR ----\n"
-                output << "#{command_stderr}\n"
-                output << "---- End #{args[:command]} STDERR ----\n"
+                output << "\n---- Begin output of #{args[:command]} ----\n"
+                output << "#{command_output}"
+                output << "---- End output of #{args[:command]} ----\n"
               end
-              raise Chef::Exception::Exec, "#{args[:command_string]} returned #{status.exitstatus}, expected #{args[:returns]}#{output}"
+              raise Chef::Exception::Exec, "#{args[:command]} returned #{status.exitstatus}, expected #{args[:returns]}#{output}"
             end
           end
-          Chef::Log.debug("Ran #{args[:command_string]} (#{args[:command]}) returned #{status.exitstatus}")
+          Chef::Log.debug("Ran #{args[:command]} returned #{status.exitstatus}")
         end
         status
       end
